@@ -1,8 +1,10 @@
 from tkinter import *
+from tkinter import messagebox
 from PIL import Image, ImageTk
 import os
 import pygame
 
+# initialize mixer settings and channels for sfx and music
 pygame.mixer.pre_init(44100, -16, 2, 1024)
 pygame.mixer.init()
 pygame.mixer.set_num_channels(8)
@@ -13,7 +15,14 @@ root.title("Quiz Time")
 root.geometry("1024x576")
 root.resizable(False, False)
 
+# resolve base directory so resource paths work regardless of run location
 script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# sets quizicon.png from Resources as the window icon using iconphoto
+icon_path = os.path.join(script_dir, "Resources", "quizicon.png")
+if os.path.exists(icon_path):
+    app_icon = ImageTk.PhotoImage(Image.open(icon_path))
+    root.iconphoto(False, app_icon)
 
 # loading background images and resizing them to fit the window
 bg_path = os.path.join(script_dir, "Resources", "Quiz.png")
@@ -41,6 +50,7 @@ bg_music_path = os.path.join(script_dir, "Resources", "BGMuisc.wav")
 sfx_volume = 0.7
 bgm_volume = 0.4
 
+# audio objects and playback tracking
 correct_sfx = None
 wrong_sfx = None
 bgm_sound = None
@@ -50,6 +60,7 @@ using_music_stream = False
 
 # load sound effects safely so missing files dont crash the app
 def load_sound_file(path):
+    # skip loading if the file does not exist
     if not os.path.exists(path):
         return None
     try:
@@ -65,6 +76,7 @@ def start_bgm():
     if not os.path.exists(bg_music_path):
         return
 
+    # try streaming music first
     try:
         pygame.mixer.music.load(bg_music_path)
         pygame.mixer.music.set_volume(bgm_volume)
@@ -74,6 +86,7 @@ def start_bgm():
     except pygame.error:
         using_music_stream = False
 
+    # fallback to Sound object on channel 0 if streaming fails
     try:
         bgm_sound = pygame.mixer.Sound(bg_music_path)
         bgm_channel.set_volume(bgm_volume)
@@ -84,6 +97,7 @@ def start_bgm():
 
 # keeps bgm looping across screens if it stops
 def check_bgm():
+    # restart streamed music if it stopped
     if using_music_stream:
         try:
             if not pygame.mixer.music.get_busy():
@@ -91,6 +105,7 @@ def check_bgm():
                 pygame.mixer.music.play(-1)
         except pygame.error:
             pass
+    # restart channel fallback music if it stopped
     elif bgm_sound is not None:
         if not bgm_channel.get_busy():
             bgm_channel.set_volume(bgm_volume)
@@ -101,6 +116,7 @@ def check_bgm():
 def play_sfx(sound_obj):
     if sound_obj is None:
         return
+    # stop any overlapping playback so the feedback sound plays cleanly
     sound_obj.set_volume(sfx_volume)
     sound_obj.stop()
     sound_obj.play()
@@ -109,6 +125,7 @@ def play_sfx(sound_obj):
 # update sfx volume from the slider
 def set_sfx_volume(val):
     global sfx_volume
+    # slider gives 0-100, pygame expects 0.0-1.0
     sfx_volume = float(val) / 100.0
     if correct_sfx is not None:
         correct_sfx.set_volume(sfx_volume)
@@ -119,6 +136,7 @@ def set_sfx_volume(val):
 # update bgm volume from the slider
 def set_bgm_volume(val):
     global bgm_volume
+    # slider gives 0-100, pygame expects 0.0-1.0
     bgm_volume = float(val) / 100.0
     if using_music_stream:
         try:
@@ -139,8 +157,10 @@ def on_close():
     root.destroy()
 
 
+# run cleanup when user clicks the window close button
 root.protocol("WM_DELETE_WINDOW", on_close)
 
+# main canvas holding backgrounds, text, and embedded widgets
 canvas = Canvas(
     root,
     width=1024,
@@ -153,37 +173,76 @@ canvas.pack()
 current_difficulty = ""
 question_number = 0
 score = 0
+active_screen = "main"
+current_correct_answer = None
 
-# questions grouped by difficulty level
+# questions grouped by difficulty level (8 per level)
 questions = {
     "Easy": [
         ("5 + 3 = ?", ["6", "7", "8", "9"], 2),
         ("10 - 4 = ?", ["4", "5", "6", "7"], 2),
         ("3 x 2 = ?", ["5", "6", "7", "8"], 1),
         ("12 / 3 = ?", ["2", "3", "4", "5"], 2),
-        ("7 + 6 = ?", ["11", "12", "13", "14"], 2)
+        ("7 + 6 = ?", ["11", "12", "13", "14"], 2),
+        ("9 - 5 = ?", ["3", "4", "5", "6"], 1),
+        ("4 x 3 = ?", ["10", "11", "12", "13"], 2),
+        ("15 / 3 = ?", ["4", "5", "6", "7"], 1)
     ],
     "Medium": [
         ("12 x 4 = ?", ["36", "42", "48", "52"], 2),
         ("81 / 9 = ?", ["7", "8", "9", "11"], 2),
         ("25 + 37 = ?", ["52", "62", "72", "82"], 1),
         ("100 - 46 = ?", ["44", "54", "56", "64"], 1),
-        ("8 x 7 = ?", ["48", "54", "56", "64"], 2)
+        ("8 x 7 = ?", ["48", "54", "56", "64"], 2),
+        ("96 / 8 = ?", ["10", "11", "12", "13"], 2),
+        ("48 + 29 = ?", ["67", "77", "87", "97"], 1),
+        ("73 - 28 = ?", ["35", "45", "55", "65"], 1)
     ],
     "Hard": [
         ("15 x 12 = ?", ["160", "170", "180", "190"], 2),
         ("144 / 12 = ?", ["10", "11", "12", "14"], 2),
         ("25 x 16 = ?", ["350", "375", "400", "450"], 2),
         ("225 / 15 = ?", ["12", "14", "15", "18"], 2),
-        ("17 x 13 = ?", ["211", "221", "231", "241"], 1)
+        ("17 x 13 = ?", ["211", "221", "231", "241"], 1),
+        ("19 x 14 = ?", ["256", "266", "276", "286"], 1),
+        ("324 / 18 = ?", ["16", "17", "18", "19"], 2),
+        ("145 + 268 = ?", ["403", "413", "423", "433"], 1)
     ]
 }
+
+
+# shows instructions using a messagebox popup
+def show_instructions():
+    messagebox.showinfo(
+        "Instructions",
+        "Click READY (or press Enter) to pick a difficulty.\n"
+        "Select an answer by clicking or pressing keys 1-4.\n"
+        "Use the SFX and BGM sliders in the top-right to adjust volume."
+    )
+
+
+# handles keyboard shortcuts with root.bind("<Key>", ...)
+def handle_keypress(event):
+    # Enter starts from main screen
+    if active_screen == "main" and event.keysym == "Return":
+        show_difficulty()
+    # number keys 1-4 map to option indices 0-3 during quiz
+    elif active_screen == "quiz" and event.char in ("1", "2", "3", "4") and current_correct_answer is not None:
+        check_answer(int(event.char) - 1, current_correct_answer)
+    # Enter replays from results screen
+    elif active_screen == "results" and event.keysym == "Return":
+        show_difficulty()
+
+
+# listen for key presses across the window
+root.bind("<Key>", handle_keypress)
 
 
 # draws the sfx and bgm sliders on each screen
 def add_audio_controls():
     check_bgm()
 
+    # sfx label and horizontal slider
     sfx_label = Label(
         root,
         text="SFX",
@@ -213,6 +272,7 @@ def add_audio_controls():
         height=18
     )
 
+    # bgm label and horizontal slider
     bgm_label = Label(
         root,
         text="BGM",
@@ -247,6 +307,7 @@ def add_audio_controls():
 def clear_screen():
     canvas.delete("all")
 
+    # keep the main canvas and remove other child widgets
     for widget in root.winfo_children():
         if widget != canvas:
             widget.destroy()
@@ -254,6 +315,8 @@ def clear_screen():
 
 # start screen
 def show_main():
+    global active_screen
+    active_screen = "main"
     clear_screen()
 
     canvas.create_image(
@@ -262,6 +325,7 @@ def show_main():
         anchor="nw"
     )
 
+    # main start button
     ready_btn = Button(
         root,
         text="READY",
@@ -277,11 +341,30 @@ def show_main():
         window=ready_btn
     )
 
+    # button that opens the instructions popup
+    info_btn = Button(
+        root,
+        text="HOW TO PLAY",
+        font=("Courier", 10, "bold"),
+        bg="#34495e",
+        fg="#ffffff",
+        bd=0,
+        width=14,
+        height=1,
+        command=show_instructions
+    )
+    canvas.create_window(
+        511, 430,
+        window=info_btn
+    )
+
     add_audio_controls()
 
 
 # difficulty selection screen
 def show_difficulty():
+    global active_screen
+    active_screen = "difficulty"
     clear_screen()
 
     canvas.create_image(
@@ -290,6 +373,7 @@ def show_difficulty():
         anchor="nw"
     )
 
+    # return to start screen
     back_btn = Button(
         root,
         text="BACK",
@@ -308,6 +392,7 @@ def show_difficulty():
         window=back_btn
     )
 
+    # difficulty buttons for Easy, Medium, and Hard
     btn_easy = Button(
         root,
         text="EASY",
@@ -373,8 +458,10 @@ def show_difficulty():
 
 # resets score and question index before countdown
 def start_countdown(level):
-    global current_difficulty, question_number, score
+    global current_difficulty, question_number, score, active_screen
 
+    # reset counters for a fresh round
+    active_screen = "countdown"
     current_difficulty = level
     question_number = 0
     score = 0
@@ -403,15 +490,18 @@ def run_countdown(count):
             fill="#f4d03f",
             tags="countdown_text"
         )
+        # step down every second using root.after
         root.after(1000, run_countdown, count - 1)
     else:
+        # short delay after countdown before first question
         root.after(400, start_quiz)
 
 
 # displays the current question and answer buttons
 def start_quiz():
-    global question_number
+    global question_number, active_screen, current_correct_answer
 
+    active_screen = "quiz"
     clear_screen()
 
     canvas.create_image(
@@ -420,6 +510,7 @@ def start_quiz():
         anchor="nw"
     )
 
+    # go back to difficulty selection
     back_btn = Button(
         root,
         text="BACK",
@@ -442,12 +533,16 @@ def start_quiz():
 
     current_questions = questions.get(current_difficulty, [])
 
+    # move to results once all questions are finished
     if question_number >= len(current_questions):
+        current_correct_answer = None
         show_results()
         return
 
     question, options, correct_answer = current_questions[question_number]
+    current_correct_answer = correct_answer
 
+    # show current question text
     canvas.create_text(
         512, 230,
         text=f"Q{question_number + 1}: {question}",
@@ -455,6 +550,7 @@ def start_quiz():
         fill="#f4d03f"
     )
 
+    # 2x2 grid positions for the four option buttons
     positions = [
         (410, 290),
         (614, 290),
@@ -462,6 +558,7 @@ def start_quiz():
         (614, 350)
     ]
 
+    # build option buttons inside the canvas
     for i, option in enumerate(options):
         if i < len(positions):
             x_pos, y_pos = positions[i]
@@ -486,8 +583,10 @@ def start_quiz():
 
 # checks selected answer, plays sfx, updates score, and moves to next question
 def check_answer(answer, correct_answer):
-    global score, question_number
+    global score, question_number, current_correct_answer
 
+    # block number-key answers while feedback is shown
+    current_correct_answer = None
     clear_screen()
 
     canvas.create_image(
@@ -498,6 +597,7 @@ def check_answer(answer, correct_answer):
 
     add_audio_controls()
 
+    # score and play feedback sound
     if answer == correct_answer:
         score += 1
         msg = "CORRECT!"
@@ -515,12 +615,15 @@ def check_answer(answer, correct_answer):
         fill=color
     )
 
+    # advance to next question after 1 second
     question_number += 1
     root.after(1000, start_quiz)
 
 
 # final score screen with replay button
 def show_results():
+    global active_screen
+    active_screen = "results"
     clear_screen()
 
     canvas.create_image(
@@ -540,6 +643,7 @@ def show_results():
         fill="#f4d03f"
     )
 
+    # replay button returns to difficulty screen
     restart_btn = Button(
         root,
         text="PLAY AGAIN",
@@ -561,11 +665,13 @@ def show_results():
 correct_sfx = load_sound_file(correct_sound_path)
 wrong_sfx = load_sound_file(wrong_sound_path)
 
+# set initial sound effect volumes
 if correct_sfx is not None:
     correct_sfx.set_volume(sfx_volume)
 if wrong_sfx is not None:
     wrong_sfx.set_volume(sfx_volume)
 
+# start music and open first screen
 start_bgm()
 show_main()
 
