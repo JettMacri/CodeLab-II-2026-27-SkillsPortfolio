@@ -7,6 +7,7 @@ pygame.mixer.pre_init(44100, -16, 2, 1024)
 pygame.mixer.init()
 pygame.mixer.set_num_channels(8)
 
+# main window setup for the quiz app
 root = Tk()
 root.title("Quiz Time")
 root.geometry("1024x576")
@@ -14,6 +15,7 @@ root.resizable(False, False)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
+# loading background images and resizing them to fit the window
 bg_path = os.path.join(script_dir, "Resources", "Quiz.png")
 bg_image_raw = Image.open(bg_path).resize((1024, 576))
 bg_img = ImageTk.PhotoImage(bg_image_raw)
@@ -30,10 +32,12 @@ ready_bg_path = os.path.join(script_dir, "Resources", "Ready.png")
 ready_bg_raw = Image.open(ready_bg_path).resize((1024, 576))
 ready_bg_img = ImageTk.PhotoImage(ready_bg_raw)
 
+# audio file paths inside the resources folder
 correct_sound_path = os.path.join(script_dir, "Resources", "correct.mp3")
 wrong_sound_path = os.path.join(script_dir, "Resources", "wrong.mp3")
 bg_music_path = os.path.join(script_dir, "Resources", "BGMuisc.wav")
 
+# default volume levels
 sfx_volume = 0.7
 bgm_volume = 0.4
 
@@ -44,6 +48,7 @@ bgm_channel = pygame.mixer.Channel(0)
 using_music_stream = False
 
 
+# load sound effects safely so missing files dont crash the app
 def load_sound_file(path):
     if not os.path.exists(path):
         return None
@@ -53,6 +58,7 @@ def load_sound_file(path):
         return None
 
 
+# start background music, with a channel fallback if music stream has trouble
 def start_bgm():
     global bgm_sound, using_music_stream
 
@@ -76,6 +82,7 @@ def start_bgm():
         bgm_sound = None
 
 
+# keeps bgm looping across screens if it stops
 def check_bgm():
     if using_music_stream:
         try:
@@ -90,6 +97,7 @@ def check_bgm():
             bgm_channel.play(bgm_sound, loops=-1)
 
 
+# play sfx when user answers a question
 def play_sfx(sound_obj):
     if sound_obj is None:
         return
@@ -98,6 +106,7 @@ def play_sfx(sound_obj):
     sound_obj.play()
 
 
+# update sfx volume from the slider
 def set_sfx_volume(val):
     global sfx_volume
     sfx_volume = float(val) / 100.0
@@ -107,6 +116,7 @@ def set_sfx_volume(val):
         wrong_sfx.set_volume(sfx_volume)
 
 
+# update bgm volume from the slider
 def set_bgm_volume(val):
     global bgm_volume
     bgm_volume = float(val) / 100.0
@@ -119,6 +129,7 @@ def set_bgm_volume(val):
         bgm_channel.set_volume(bgm_volume)
 
 
+# clean up audio when window closes
 def on_close():
     try:
         pygame.mixer.music.stop()
@@ -138,10 +149,12 @@ canvas = Canvas(
 )
 canvas.pack()
 
+# tracking game state
 current_difficulty = ""
 question_number = 0
 score = 0
 
+# questions grouped by difficulty level
 questions = {
     "Easy": [
         ("5 + 3 = ?", ["6", "7", "8", "9"], 2),
@@ -167,6 +180,7 @@ questions = {
 }
 
 
+# draws the sfx and bgm sliders on each screen
 def add_audio_controls():
     check_bgm()
 
@@ -229,6 +243,7 @@ def add_audio_controls():
     )
 
 
+# removes old canvas items and widgets before switching pages
 def clear_screen():
     canvas.delete("all")
 
@@ -237,6 +252,7 @@ def clear_screen():
             widget.destroy()
 
 
+# start screen
 def show_main():
     clear_screen()
 
@@ -264,6 +280,7 @@ def show_main():
     add_audio_controls()
 
 
+# difficulty selection screen
 def show_difficulty():
     clear_screen()
 
@@ -354,6 +371,7 @@ def show_difficulty():
     add_audio_controls()
 
 
+# resets score and question index before countdown
 def start_countdown(level):
     global current_difficulty, question_number, score
 
@@ -373,6 +391,7 @@ def start_countdown(level):
     run_countdown(3)
 
 
+# 3 second countdown before showing questions
 def run_countdown(count):
     canvas.delete("countdown_text")
 
@@ -389,6 +408,7 @@ def run_countdown(count):
         root.after(400, start_quiz)
 
 
+# displays the current question and answer buttons
 def start_quiz():
     global question_number
 
@@ -464,6 +484,7 @@ def start_quiz():
             )
 
 
+# checks selected answer, plays sfx, updates score, and moves to next question
 def check_answer(answer, correct_answer):
     global score, question_number
 
@@ -498,6 +519,7 @@ def check_answer(answer, correct_answer):
     root.after(1000, start_quiz)
 
 
+# final score screen with replay button
 def show_results():
     clear_screen()
 
@@ -535,6 +557,7 @@ def show_results():
     )
 
 
+# preload sound effects and start the app
 correct_sfx = load_sound_file(correct_sound_path)
 wrong_sfx = load_sound_file(wrong_sound_path)
 
