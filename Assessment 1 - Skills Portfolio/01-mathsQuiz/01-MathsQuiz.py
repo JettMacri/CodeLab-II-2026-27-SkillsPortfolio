@@ -32,7 +32,7 @@ ready_bg_img = ImageTk.PhotoImage(ready_bg_raw)
 
 correct_sound_path = os.path.join(script_dir, "Resources", "correct.mp3")
 wrong_sound_path = os.path.join(script_dir, "Resources", "wrong.mp3")
-bg_music_path = os.path.join(script_dir, "Resources", "BGmusic.mp3")
+bg_music_path = os.path.join(script_dir, "Resources", "BGMuisc.wav")
 
 sfx_volume = 0.7
 bgm_volume = 0.4
